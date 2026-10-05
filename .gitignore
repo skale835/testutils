@@ -1,0 +1,12 @@
+#Compiled files
+*.o
+*.out
+*.exe
+
+# swap files
+*.swp
+
+# Other
+
+
+
