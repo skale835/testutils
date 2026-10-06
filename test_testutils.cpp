@@ -1,10 +1,10 @@
 /*_test_testUtils.cpp________________________________________________
-|  Test program for testUtils.h.                                    |
+|  Test program for testUtils.h.                                     |
 |                                                                    |
 |  Copyright (c) 2026 Sameer Kale [skale835@proton.me]               |
 |  SPDX-License-Identifier: MIT                                      |
 |                                                                    |
-|__________________________________________________________________*/
+|___________________________________________________________________*/
 // =========== HEADERS ============================================ //
   #include "testutils.h"
 
@@ -25,6 +25,12 @@
     test::printResult("false condition", 2 + 2 == 5);
 
 
+// ----------- printVariable() ------------------------------------ //
+    test::printHeading("printVariable()");
+    test::printVariable("name","value");
+    test::printVariable("name",56.3);
+
+
 // ----------- printArray() --------------------------------------- //
     test::printHeading("printArray()");
 
@@ -34,9 +40,14 @@
     test::printArray("intArray", intArray);
     test::printArray("stringArray", stringArray);
 
+// ----------- printNote() ---------------------------------------- //
+    test::printHeading("printNote()"); 
+    test::printNote("This is a note");
 
 // ----------- EXPECT_OK ------------------------------------------ //
     test::printHeading("EXPECT_OK");
+
+    test::printNote("Result should be [PASS] [FAIL] [FAIL]");
 
     EXPECT_OK(
       {
@@ -61,6 +72,7 @@
 
 // ----------- EXPECT_NG ------------------------------------------ //
     test::printHeading("EXPECT_NG");
+    test::printNote("Result should be [PASS] [FAIL] [FAIL] [FAIL]");
 
     EXPECT_NG(
       throw std::out_of_range("intentional expected exception"),
