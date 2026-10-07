@@ -20,16 +20,22 @@
 
 // ----------- Colors -------------------------------------------- //
   const std::string TERM_RED      = "\033[31m";
+  const std::string TERM_RED_BOLD = "\033[91m";
   const std::string TERM_YEL      = "\033[33m";
   const std::string TERM_YEL_BOLD = "\033[93m";
   const std::string TERM_GRN      = "\033[32m";
   const std::string TERM_CYN      = "\033[36m";
+  const std::string TERM_MAG      = "\033[35m";
+  const std::string TERM_GRA      = "\033[90m";
   const std::string TERM_UNC      = "\033[0m";
   #define TU_RED(a) TERM_RED + a + TERM_UNC
   #define TU_YEL(a) TERM_YEL + a + TERM_UNC
   #define TU_YEL_BOLD(a) TERM_YEL_BOLD + a + TERM_UNC
+  #define TU_RED_BOLD(a) TERM_RED_BOLD + a + TERM_UNC
   #define TU_GRN(a) TERM_GRN + a + TERM_UNC
   #define TU_CYN(a) TERM_CYN + a + TERM_UNC
+  #define TU_MAG(a) TERM_MAG + a + TERM_UNC
+  #define TU_GRA(a) TERM_GRA + a + TERM_UNC
 
   /* In strings, use TU_CYN("some phrase") to make "some phrase" cyan. */
 
@@ -54,7 +60,7 @@
 // ----------- printNote() --------------------------------------- //
   inline void printNote(const std::string& noteText) {
     std::cout <<
-       TU_CYN("NOTE:") + "\t" + noteText + "\n" << std::endl;
+       TU_YEL("NOTE:") + "\t" + noteText + "\n" << std::endl;
   }
 
 // ----------- printResult() ------------------------------------- //
@@ -80,9 +86,27 @@
       std::cout << arrayElement << " ";
     }
     std::cout << "}" << std::endl;
+    return;
   }
 
-// =========== Tests ============================================= //
+// ----------- printOutput() ---------------------------------TEST- //
+  inline void printOutput(const std::string& outName,
+                          const std::string& termOutput) {
+    std::string output = termOutput;
+    std::size_t lineNo = 1;
+    std::cout << TU_MAG("OUTPUT\t" << outName) 
+                 << ":\n" + TU_GRA(std::to_string(lineNo++)) + "\t";
+    std::size_t pos = 0;
+    do {
+      pos = output.find("\n",pos);
+      if (pos++ + 1>= output.size()) break;
+      output.insert(pos,TU_GRA(std::to_string(lineNo++)) + "\t");
+    } while (1);
+    std::cout << output;
+//  std::cout << TU_CYN("\t--------") << std::endl;
+    return;
+  }
+// =========== EXCEPTION CATCHING ================================ //
     /* EXPECT_OK will try goodBlock. If error is thrown, test
        will fail. No thrown error, pass. Hence "Expect OK".
        printResult is called either way. */
@@ -127,7 +151,26 @@
   } while (0)
 
 
-
+// =========== CLI COMMAND EVALUATION ============================ //
+  int runCommand(std::string sysCmd,
+                 std::string *stdoutTo,
+                 std::string* stderrTo,
+                 int* returnTo) {
+    const std::size_t bufsize = 128;
+    FILE *pipe = popen(sysCmd.c_str(), "r");
+    char buf[bufsize];
+    char* fgets_ptr = buf;
+    while(1) {
+      fgets_ptr = fgets(buf, bufsize, pipe);
+      if (fgets_ptr == NULL) break;
+      (*stdoutTo).append(buf);
+    } 
+    fgets(buf, bufsize, pipe);
+    (*stdoutTo).append(buf);
+    *stderrTo = "";
+    *returnTo = pclose(pipe);
+    return 0;
+  }
  
   } // namespace test
   #endif //TESTUTILS_H

@@ -101,7 +101,22 @@
       std::out_of_range
     );
 
+// ----------- runCommand()---------------------------------------- //
+    test::printHeading("runCommand()");
+    std::string so;
+    std::string eo;
+    int cr;
+    test::printResult("runCommand()$: ls -alh :$ No Error",
+                      !test::runCommand("ls -alh",&so, &eo, &cr));
+    test::printOutput("stdout",so);
+    test::printOutput("stderr",eo);
+    test::printResult("command return status OK",!cr);
+
+
+
+// --------- Return ---------------------------------------------- //
+    test::printHeading("\tTEST COMPLETE");
     return 0;
   }
 
-//+++++++++++ EOF +++++++++++++++++++++++++++++++++++++++++++++++++ //
+//+++++++++++ EOF ++++++++++++++++++++++++++++++++++++++++++++++++ //
