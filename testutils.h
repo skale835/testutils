@@ -180,10 +180,10 @@
 
 // =========== CLI COMMAND EVALUATION ============================ //
 
-  int runCommand(std::string cmd,
-                 std::string *stdoutTo,
-                 std::string *stderrTo,
-                 int *returnTo) {
+  inline int runCommand(std::string cmd,
+                        std::string *stdoutTo,
+                        std::string *stderrTo,
+                        int *returnTo) {
   
     //-> Create pipes for stdout and stderr
     int outP[2] = {0};
