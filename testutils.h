@@ -255,8 +255,7 @@
     int pollResult = 0;
 //    int nReloops = 0;
     int stopLooping = 0;
-    int outIsEOF = 0;
-    int errIsEOF = 0;
+
     do {
       pollResult = poll(pArray,2,MAX_BLOCK_TIME);
         /* Lots of error checking; the "bad" paths are marked 
@@ -266,7 +265,13 @@
         /* Receive from outP */
       if (pollResult > 0) { //~
 //        nReloops = 0;
-        if (pArray[0].revents & POLLIN) { //~
+        if (pArray[0].revents & POLLNVAL) { //!
+          throw std::runtime_error("outP[0] invalid");
+        }
+        else if (pArray[0].revents & POLLERR) {//!
+          throw std::runtime_error("outP[0] error"); 
+        }
+        else if (pArray[0].revents & POLLIN) { //~
           nReadOut = read(outP[0], buf, BUF_SIZE);
           if (nReadOut < 0) { //!
             int errNo = errno;
@@ -278,15 +283,15 @@
             memset(buf,0,BUF_SIZE);
           }
         }
-        else if (pArray[0].revents & POLLNVAL) { //!
-          throw std::runtime_error("outP[0] invalid");
-        }
-        else if (pArray[0].revents & POLLERR) {//!
-          throw std::runtime_error("outP[0] error"); 
-        }
 
         /* Receive from errP */
-        if (pArray[1].revents & POLLIN) { //~
+        if (pArray[1].revents & POLLNVAL) { //!
+          throw std::runtime_error("errP[0] invalid");
+        }
+        else if (pArray[1].revents & POLLERR) {//!
+          throw std::runtime_error("errP[0] error"); 
+        }
+        else if (pArray[1].revents & POLLIN) { //~
           nReadErr = read(errP[0], buf, BUF_SIZE);
           if (nReadErr < 0) {//!
             int errNo = errno;
@@ -297,12 +302,6 @@
             (*stderrTo).append(buf,0,nReadErr);
             memset(buf,0,BUF_SIZE);
           }
-        }
-        else if (pArray[1].revents & POLLNVAL) { //!
-          throw std::runtime_error("errP[0] invalid");
-        }
-        else if (pArray[1].revents & POLLERR) {//!
-          throw std::runtime_error("errP[0] error"); 
         }
       }
       else if (pollResult < 0) 
