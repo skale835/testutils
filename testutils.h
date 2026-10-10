@@ -329,8 +329,8 @@
     #define MAX_BLOCK_TIME 1000 // ms until reloop
 //    #define MAX_RELOOPS 3 // maximum reloops until giveup
     char buf[BUF_SIZE];
-    int nBytesReadOut = 0;
-    int nBytesReadErr = 0;
+    int nReadOut = 0;
+    int nReadErr = 0;
       /* Array containing outP, errP pollfd structs */
     struct pollfd pArray[2];
     pArray[0].fd = outP[0];
@@ -340,28 +340,26 @@
     int pollResult = 0;
 //    int nReloops = 0;
     int stopLooping = 0;
-
+    int outIsEOF = 0;
+    int errIsEOF = 0;
     do {
       pollResult = poll(pArray,2,MAX_BLOCK_TIME);
         /* Lots of error checking; the "bad" paths are marked 
            with //! and the "good" paths with //~ */
-
+      nReadOut = 0;
+      nReadErr = 0;
         /* Receive from outP */
       if (pollResult > 0) { //~
 //        nReloops = 0;
         if (pArray[0].revents & POLLIN) { //~
-          nBytesReadOut = read(outP[0], buf, BUF_SIZE);
-          if (nBytesReadOut < 0) { //!
+          nReadOut = read(outP[0], buf, BUF_SIZE);
+          if (nReadOut < 0) { //!
             int errNo = errno;
-            if (errNo == EAGAIN) {
-//            nBytesReadOut--; /* A hack, but OK for just now. */
-            }
-            else {
-            throw std::runtime_error("Read outP failed.");
-            }
+            if (errNo == EAGAIN) {}
+            else throw std::runtime_error("Read outP failed.");
           }
-          if (nBytesReadOut > 0) { //~
-            (*stdoutTo).append(buf,0,nBytesReadOut);
+          if (nReadOut > 0) { //~
+            (*stdoutTo).append(buf,0,nReadOut);
             memset(buf,0,BUF_SIZE);
           }
         }
@@ -374,12 +372,14 @@
 
         /* Receive from errP */
         if (pArray[1].revents & POLLIN) { //~
-          nBytesReadErr = read(errP[0], buf, BUF_SIZE);
-          if (nBytesReadErr < 0) {//!
-            throw std::runtime_error("Read errP failed.");
+          nReadErr = read(errP[0], buf, BUF_SIZE);
+          if (nReadErr < 0) {//!
+            int errNo = errno;
+            if (errNo == EAGAIN) {}
+            else throw std::runtime_error("Read errP failed.");
           }
-          if (nBytesReadErr > 0) { //~
-            (*stderrTo).append(buf,0,nBytesReadErr);
+          if (nReadErr > 0) { //~
+            (*stderrTo).append(buf,0,nReadErr);
             memset(buf,0,BUF_SIZE);
           }
         }
@@ -395,8 +395,8 @@
 //      else nReloops++; // pollResult == 0
 //    std::cout << nReloops << std::endl; // TEMP
           /* All conditions must be met to stop looping */
-      stopLooping  = (nBytesReadOut < BUF_SIZE);
-      stopLooping *= (nBytesReadErr < BUF_SIZE);
+      stopLooping  = (nReadOut < BUF_SIZE);
+      stopLooping *= (nReadErr < BUF_SIZE);
       stopLooping *= (pArray[0].revents & POLLHUP);
       stopLooping *= (pArray[1].revents & POLLHUP);
 //      stopLooping *= (nReloops >= MAX_RELOOPS);  
