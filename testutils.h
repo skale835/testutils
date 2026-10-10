@@ -270,7 +270,7 @@
           nReadOut = read(outP[0], buf, BUF_SIZE);
           if (nReadOut < 0) { //!
             int errNo = errno;
-            if ((errNo == EAGAIN) || (errNo = EWOULDBLOCK)) {}
+            if ((errNo == EAGAIN) || (errNo == EWOULDBLOCK)) {}
             else throw std::runtime_error("Read outP failed.");
           }
           if (nReadOut > 0) { //~
@@ -290,7 +290,7 @@
           nReadErr = read(errP[0], buf, BUF_SIZE);
           if (nReadErr < 0) {//!
             int errNo = errno;
-            if ((errNo == EAGAIN) || (errNo = EWOULDBLOCK)) {}
+            if ((errNo == EAGAIN) || (errNo == EWOULDBLOCK)) {}
             else throw std::runtime_error("Read errP failed.");
           }
           if (nReadErr > 0) { //~
