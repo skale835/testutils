@@ -24,6 +24,8 @@
     /* poll() */
   #include <stdlib.h>
     /* exit() */
+  #include <error.h>
+    /* C error handling */
   #include <string.h>
   namespace test {        /* Call all functions using test::fn() */
 
@@ -307,6 +309,15 @@
     if (close(outP[1])) throw std::runtime_error("P close out");
     if (close(errP[1])) throw std::runtime_error("P close err");
 
+    //-> Set read pipe ends to nonblocking.
+    if !(fcntl(outP[0],F_GETFD) & O_NONBLOCK) {
+      fcntl(outP[0],F_SETFD,O_NONBLOCK);
+    }
+
+    if !(fcntl(errP[0],F_GETFD) & O_NONBLOCK) {
+      fcntl(errP[0],F_SETFD,O_NONBLOCK);
+    }
+
     //-O Collect output from outP and/or errP. Move on when done.
     #define BUF_SIZE 128
     #define MAX_BLOCK_TIME 1000 // ms until reloop
@@ -335,7 +346,13 @@
         if (pArray[0].revents & POLLIN) { //~
           nBytesReadOut = read(outP[0], buf, BUF_SIZE);
           if (nBytesReadOut < 0) { //!
+            int errNo = errno;
+            if (errNo == EAGAIN) {
+              nBytesReadOut--; /* A hack, but OK for just now. */
+            }
+            else {
             throw std::runtime_error("Read outP failed.");
+            }
           }
           if (nBytesReadOut > 0) { //~
             (*stdoutTo).append(buf,0,nBytesReadOut);
