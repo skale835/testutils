@@ -13,6 +13,16 @@
   #include <string>
   #include <stdexcept>
   #include <exception>
+
+  #include <unistd.h>
+    /* pipes & file descriptors */
+  #include <fcntl.h>
+    /* Definition of O_* constants */
+  #include <sys/wait.h>
+    /* waitpid() */
+  #include <poll.h>
+    /* poll() */
+  #include <string.h>
   namespace test {        /* Call all functions using test::fn() */
 
 
@@ -43,15 +53,15 @@
 // ----------- printTitle() -------------------------------------- //
   inline void printTitle(const std::string& titleText) {
     std::cout << TU_YEL_BOLD(
-      "\n============================================================\n"
-      + titleText +
-      "\n============================================================\n");
+   "\n============================================================\n"
+   + titleText +
+   "\n============================================================\n");
   }
 
 // ----------- printHeading() ------------------------------------ //
   inline void printHeading(const std::string& headingText) {
     std::cout <<
-      "\n------------------------------------------------------------\n";
+    "\n------------------------------------------------------------\n";
     std::cout << TU_YEL(headingText) << '\n';
     std::cout <<
       "------------------------------------------------------------\n";
@@ -74,14 +84,14 @@
   template <typename T>
   inline void printVariable(const std::string &variableName, 
                             const T& variable) {
-    std::cout << "       " + variableName + " = " << variable << std::endl;
+    std::cout << "\t" + variableName + " = " << variable << std::endl;
   }
 
 // ----------- printArray() -------------------------------------- //
   template <typename T>
   inline void printArray(const std::string& arrayName, 
                          const T& array) {
-    std::cout << "       " + arrayName + " = {" ;
+    std::cout << "\t" + arrayName + " = {" ;
     for (const auto & arrayElement : array) {
       std::cout << arrayElement << " ";
     }
@@ -93,15 +103,24 @@
   inline void printOutput(const std::string& outName,
                           const std::string& termOutput) {
     std::string output = termOutput;
+    /* If last character is NOT `\n` add one. */
+    if (output.back() != '\n') output.append("\n");
+
     std::size_t lineNo = 1;
-    std::cout << TU_MAG("OUTPUT\t" << outName) 
-                 << ":\n" + TU_GRA(std::to_string(lineNo++)) + "\t";
+    std::cout << TU_MAG("OUTPUT\t" << outName);
+    if (termOutput.length() == 0) {
+      std::cout << TU_GRA("\nNONE") << std::endl;
+      return;
+    }
+    std::cout << ": "<< output.size() << "\n" 
+              << TU_GRA(std::to_string(lineNo++)) + "\t";
     std::size_t pos = 0;
+    #define MAX_LINES 16
     do {
       pos = output.find("\n",pos);
       if (pos++ + 1>= output.size()) break;
       output.insert(pos,TU_GRA(std::to_string(lineNo++)) + "\t");
-    } while (1);
+    } while (1);//lineNo <= MAX_LINES);
     std::cout << output;
 //  std::cout << TU_CYN("\t--------") << std::endl;
     return;
@@ -165,13 +184,190 @@
       if (fgets_ptr == NULL) break;
       (*stdoutTo).append(buf);
     } 
-    fgets(buf, bufsize, pipe);
-    (*stdoutTo).append(buf);
     *stderrTo = "";
     *returnTo = pclose(pipe);
     return 0;
   }
  
+  int runCommandFork(std::string cmd,
+                     std::string *stdoutTo,
+                     std::string *stderrTo,
+                     int         *returnTo) {
+
+    //-> Create pipes for stdout and stderr
+    int outP[2];
+    int errP[2];
+    std::cout << "Milestone 1" << std::endl;
+    if (pipe(outP)) throw std::runtime_error("out pipe failed");
+    std::cout << "Milestone 2" << std::endl;
+    if (pipe(errP)) throw std::runtime_error("err pipe failed");
+    std::cout << "Milestone 3" << std::endl;
+
+    //-> Fork
+    pid_t pid = fork();
+    if (pid == -1) throw std::runtime_error("fork failed");
+
+    //-? Child 
+      /* Child process connects stdout, stderr to pipes, then 
+         exec(cmd). */
+    if (!pid) {
+      if (close(outP[0])) throw std::runtime_error("close out");
+      if (close(errP[0])) throw std::runtime_error("close err");
+      std::cout << "Child first" << std::endl;
+      if (dup2(outP[1],1)==-1) 
+        throw std::runtime_error("out dup failed");
+      if (dup2(errP[1],2)==-1) 
+        throw std::runtime_error("err dup failed");
+      execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*) NULL);
+    }
+
+    //-> Parent awaits child's termination, gets return val.
+    if (close(outP[1])) throw std::runtime_error("close out");
+    if (close(errP[1])) throw std::runtime_error("close err");
+
+    //-> Read stdout and stderr
+    #define BUF_SIZE 128
+    char buf[BUF_SIZE];
+    int nBytesReadOut = 0;
+    int nBytesReadErr = 0;
+    do {
+      nBytesReadOut = read(outP[0], buf, BUF_SIZE);
+      if (nBytesReadOut < 0) throw std::runtime_error("Read failed.");
+      if (nBytesReadOut > 0) {(*stdoutTo).append(buf,0,nBytesReadOut);
+                           memset(buf,0,BUF_SIZE);}
+
+      nBytesReadErr = read(errP[0], buf, BUF_SIZE);
+      if (nBytesReadErr < 0) throw std::runtime_error("Read failed.");
+      if (nBytesReadErr > 0) {(*stderrTo).append(buf,0,nBytesReadErr);
+                           memset(buf,0,BUF_SIZE);};
+
+    } while (nBytesReadOut + nBytesReadErr);
+
+    int stat_val;
+    if (waitpid(pid, &stat_val, 0)==-1)
+      throw std::runtime_error("waitpid failed");
+    std::cout << "Child stat_val: " << stat_val << std::endl;
+    if (WIFEXITED(stat_val))  
+      *returnTo = WEXITSTATUS(stat_val); 
+    std::cout << "Child process PID: " << pid << std::endl;
+
+    
+    std::cout << "stderr done\n";
+    
+    return 0; 
+  }
+
+  int runCommandPoll(std::string cmd,
+                     std::string *stdoutTo,
+                     std::string *stderrTo,
+                     int *returnTo) {
+  
+    //-> Create pipes for stdout and stderr
+    int outP[2];
+    int errP[2];
+    std::cout << "Milestone 1" << std::endl;
+    if (pipe(outP)) throw std::runtime_error("out pipe failed");
+    std::cout << "Milestone 2" << std::endl;
+    if (pipe(errP)) throw std::runtime_error("err pipe failed");
+    std::cout << "Milestone 3" << std::endl;
+
+    //-> Fork
+    pid_t pid = fork();
+    if (pid == -1) throw std::runtime_error("fork failed");
+
+    //-? Child 
+      /* Child process connects stdout, stderr to pipes, then 
+         exec(cmd). */
+    if (!pid) {
+      if (close(outP[0])) throw std::runtime_error("close out");
+      if (close(errP[0])) throw std::runtime_error("close err");
+      std::cout << "Child first" << std::endl;
+      if (dup2(outP[1],1)==-1) 
+        throw std::runtime_error("out dup failed");
+      if (dup2(errP[1],2)==-1) 
+        throw std::runtime_error("err dup failed");
+      execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*) NULL);
+      /* Note that child process will either throw or terminate
+         via exec. Effectively, it will end in this block. */
+    }
+
+    //-> Parent: Close leftover pipe ends.
+    if (close(outP[1])) throw std::runtime_error("close out");
+    if (close(errP[1])) throw std::runtime_error("close err");
+
+    //-O Collect output from outP and/or errP. Move on when done.
+    #define BUF_SIZE 128
+    #define MAX_BLOCK_TIME 1000 // ms until reloop
+    #define MAX_RELOOPS 3 // maximum reloops until giveup
+    char buf[BUF_SIZE];
+    int nBytesReadOut = 0;
+    int nBytesReadErr = 0;
+      /* Array containing outP, errP pollfd structs */
+    struct pollfd pArray[2];
+    pArray[0].fd = outP[0];
+    pArray[0].events = POLLIN;
+    pArray[1].fd = errP[0];
+    pArray[1].events = POLLIN;
+    int pollResult = 0;
+    int nReloops = 0;
+    int keepLooping = 0;
+
+    do {
+      pollResult = poll(pArray,2,MAX_BLOCK_TIME);
+        /* Lots of error checking; the "bad" paths are marked 
+           with //! and the "good" paths with //~ */
+      if (pollResult > 0) { //~
+        if (pArray[0].revents & POLLIN) { //~
+          nBytesReadOut = read(outP[0], buf, BUF_SIZE);
+          if (nBytesReadOut < 0) { //!
+            throw std::runtime_error("Read outP failed.");
+          }
+          if (nBytesReadOut > 0) { //~
+            (*stdoutTo).append(buf,0,nBytesReadOut);
+            memset(buf,0,BUF_SIZE);
+          }
+        }
+        else if (pArray[0].revents & POLLNVAL) { //!
+          throw std::runtime_error("outP[0] invalid");
+        }
+        else if (pArray[0].revents & POLLERR) {//!
+          throw std::runtime_error("outP[0] error"); 
+        }
+
+        if (pArray[1].revents & POLLIN) { //~
+          nBytesReadErr = read(errP[0], buf, BUF_SIZE);
+          if (nBytesReadOut < 0) {//!
+            throw std::runtime_error("Read errP failed.");
+          }
+          if (nBytesReadOut > 0) { //~
+            (*stderrTo).append(buf,0,nBytesReadOut);
+            memset(buf,0,BUF_SIZE);
+          }
+        }
+        else if (pArray[1].revents & POLLNVAL) { //!
+          throw std::runtime_error("errP[0] invalid");
+        }
+        else if (pArray[1].revents & POLLERR) {//!
+          throw std::runtime_error("errP[0] error"); 
+        }
+        keepLooping = !( 
+             (nBytesReadOut < BUF_SIZE)
+          && (nBytesReadErr < BUF_SIZE)
+          && (pArray[0].revents & POLLHUP)
+          && (pArray[1].revents & POLLHUP)); 
+      } 
+    } while (keepLooping);
+    
+    //-> Collect return status from exec'd function
+    int stat_val;
+    if (waitpid(pid, &stat_val, 0)==-1)
+      throw std::runtime_error("waitpid failed");
+    if (WIFEXITED(stat_val))  
+      *returnTo = WEXITSTATUS(stat_val); 
+
+    return 0; 
+  }
+
   } // namespace test
   #endif //TESTUTILS_H
 

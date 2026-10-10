@@ -101,7 +101,8 @@
       std::out_of_range
     );
 
-// ----------- runCommand()---------------------------------------- //
+// ----------- runCommand() --------------------------------------- //
+    {
     test::printHeading("runCommand()");
     std::string so;
     std::string eo;
@@ -111,8 +112,34 @@
     test::printOutput("stdout",so);
     test::printOutput("stderr",eo);
     test::printResult("command return status OK",!cr);
+    }
 
 
+// ----------- runCommandFork() ----------------------------------- //
+    {
+    test::printHeading("runCommandFork()");
+    std::string so;
+    std::string eo;
+    int cr;
+    test::printResult("runCommandFork()$: ls -alh :$ No Error",
+                      !test::runCommandFork("ls -alh",&so, &eo, &cr));
+    test::printOutput("stdout",so);
+    test::printOutput("stderr",eo);
+    test::printResult("command return status OK",!cr);
+    }
+
+// ----------- runCommandPoll() ----------------------------------- //
+    {
+    test::printHeading("runCommandPoll()");
+    std::string so;
+    std::string eo;
+    int cr;
+    test::printResult("runCommandPoll()$: ls -alh :$ No Error",
+                      !test::runCommandPoll("ls -alh",&so, &eo, &cr));
+    test::printOutput("stdout",so);
+    test::printOutput("stderr",eo);
+    test::printResult("command return status OK",!cr);
+    }
 
 // --------- Return ---------------------------------------------- //
     test::printHeading("\tTEST COMPLETE");
