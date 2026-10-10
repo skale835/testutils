@@ -56,6 +56,7 @@
 // =========== Prints ============================================ //
 // ----------- printTitle() -------------------------------------- //
   inline void printTitle(const std::string& titleText) {
+
     std::cout << TU_YEL_BOLD(
    "\n============================================================\n"
    + titleText +
@@ -64,6 +65,7 @@
 
 // ----------- printHeading() ------------------------------------ //
   inline void printHeading(const std::string& headingText) {
+
     std::cout <<
     "\n------------------------------------------------------------\n";
     std::cout << TU_YEL(headingText) << '\n';
@@ -73,12 +75,15 @@
 
 // ----------- printNote() --------------------------------------- //
   inline void printNote(const std::string& noteText) {
+
     std::cout <<
        TU_YEL("NOTE:") + "\t" + noteText + "\n" << std::endl;
   }
 
 // ----------- printResult() ------------------------------------- //
-  inline void printResult(const std::string& testName, bool result) {
+  inline void printResult(const std::string& testName, 
+                                bool         result) {
+
     std::cout << (result? TU_GRN("[PASS]")
                     : TU_RED("[FAIL]"))
          << " " << testName << std::endl;
@@ -86,15 +91,17 @@
 
 // ----------- printVariable() ----------------------------------- //
   template <typename T>
-  inline void printVariable(const std::string &variableName, 
-                            const T& variable) {
+  inline void printVariable(const std::string& variableName, 
+                            const T&           variable) {
+
     std::cout << "\t" + variableName + " = " << variable << std::endl;
   }
 
 // ----------- printArray() -------------------------------------- //
   template <typename T>
   inline void printArray(const std::string& arrayName, 
-                         const T& array) {
+                         const T&           array) {
+
     std::cout << "\t" + arrayName + " = { " ;
     for (const auto & arrayElement : array) {
       std::cout << arrayElement << " ";
@@ -103,9 +110,10 @@
     return;
   }
 
-// ----------- printOutput() ---------------------------------TEST- //
+// ----------- printOutput() -------------------------------------- //
   inline void printOutput(const std::string& outName,
                           const std::string& termOutput) {
+
     std::string output = termOutput;
 
     std::size_t lineNo = 1;
@@ -123,17 +131,17 @@
     std::cout << ": "<< output.size() << "\n" 
               << TU_GRA(std::to_string(lineNo++)) + "\t";
     std::size_t pos = 0;
-    #define MAX_LINES 16
     do {
       pos = output.find("\n",pos);
       if (pos++ + 1>= output.size()) break;
       output.insert(pos,TU_GRA(std::to_string(lineNo++)) + "\t");
-    } while (1);//lineNo <= MAX_LINES);
+    } while (1);
     std::cout << output;
-//  std::cout << TU_CYN("\t--------") << std::endl;
     return;
   }
 // =========== EXCEPTION CATCHING ================================ //
+
+// ----------- EXPECT_OK() ---------------------------------------- //
     /* EXPECT_OK will try goodBlock. If error is thrown, test
        will fail. No thrown error, pass. Hence "Expect OK".
        printResult is called either way. */
@@ -153,6 +161,7 @@
     }                                                              \
   } while (0)
 
+// ----------- EXPECT_NG() ---------------------------------------- //
      /* EXPECT_NG will try badBlock. If the specified expErr
         (must be std::exception type)  is thrown, then
         pass. Otherwise, fail.  "Expect NG". As with EXPECT_OK, 
@@ -180,16 +189,35 @@
 
 // =========== CLI COMMAND EVALUATION ============================ //
 
+// ----------- runCommand() --------------------------------------- //
+    /* runCommand() runs the command `cmd` through /bin/sh. 
+          >> /bin/sh -c `cmd`
+       
+       It sends stdout to stdoutTo, and stderr to stderrTo. It will
+       return the /bin/sh exit status to returnTo, which will 
+       ordinarily be the `cmd` exit status. Refer to sh documentation.
+       
+       runCommand() will throw an exception for any reason that the 
+       above could not be done properly. These exceptions can be
+       caught through EXPECT_OK() or EXPECT_NG() */
+       
+       
   inline int runCommand(std::string cmd,
                         std::string *stdoutTo,
                         std::string *stderrTo,
-                        int *returnTo) {
-  
+                        int         *returnTo) {
+    constexpr int READ = 0;
+    constexpr int WRITE = 1;
+    constexpr int OUTP = 0;
+    constexpr int ERRP = 1;
+    
+
     //-> Create pipes for stdout and stderr
     int outP[2] = {0};
     int errP[2] = {0};
     if (pipe(outP)) throw std::runtime_error("out pipe failed");
     if (pipe(errP)) throw std::runtime_error("err pipe failed");
+
     //-> Fork
     pid_t pid = fork();
     if (pid == -1) throw std::runtime_error("fork failed");
@@ -198,15 +226,15 @@
       /* Child process connects stdout, stderr to pipes, then 
          exec(cmd). */
     if (!pid) {
-      //-> dup() the pipe ends to stdout and stderr
-      if (close(outP[0])) throw std::runtime_error("C close out");
-      if (close(errP[0])) throw std::runtime_error("C close err");
-      if (dup2(outP[1],1)==-1) 
+      //-> dup2() the pipe ends to stdout and stderr
+      if (close(outP[READ])) throw std::runtime_error("C close out");
+      if (close(errP[READ])) throw std::runtime_error("C close err");
+      if (dup2(outP[WRITE],STDOUT_FILENO) == -1) 
         throw std::runtime_error("out dup failed");
-      if (dup2(errP[1],2)==-1) 
+      if (dup2(errP[WRITE],STDERR_FILENO) == -1) 
         throw std::runtime_error("err dup failed");
-      if (close(outP[1])) throw std::runtime_error("C close out");
-      if (close(errP[1])) throw std::runtime_error("C close err");
+      if (close(outP[WRITE])) throw std::runtime_error("C close out");
+      if (close(errP[WRITE])) throw std::runtime_error("C close err");
       
       //-> exec(cmd)
       execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*) NULL);
@@ -217,108 +245,104 @@
        
     }
     //-> Parent: Close leftover pipe ends.
-    if (close(outP[1])) throw std::runtime_error("P close out");
-    if (close(errP[1])) throw std::runtime_error("P close err");
+    if (close(outP[WRITE])) throw std::runtime_error("P close out");
+    if (close(errP[WRITE])) throw std::runtime_error("P close err");
 
     //-> Set read pipe ends to nonblocking.
     int flags;
-    flags = fcntl(outP[0], F_GETFL);
+    flags = fcntl(outP[READ], F_GETFL);
     if (flags == -1) throw std::runtime_error("outP GETFL fail");
     if (!(flags & O_NONBLOCK)) {
-      flags = fcntl(outP[0], F_SETFL, flags | O_NONBLOCK);
+      flags = fcntl(outP[READ], F_SETFL, flags | O_NONBLOCK);
       if (flags == -1) throw std::runtime_error("outP SETFL fail");
     }
-    flags = fcntl(errP[0], F_GETFL);
+    flags = fcntl(errP[READ], F_GETFL);
     if (flags == -1) throw std::runtime_error("errP GETFL fail");
     if (!(flags & O_NONBLOCK)) {
-      flags = fcntl(errP[0], F_SETFL, flags | O_NONBLOCK);
+      flags = fcntl(errP[READ], F_SETFL, flags | O_NONBLOCK);
       if (flags == -1) throw std::runtime_error("errP SETFL fail");
     }
 
     //-O Collect output from outP and/or errP. Move on when done.
     #define BUF_SIZE 128
     #define MAX_BLOCK_TIME 1000 // ms until reloop
-//    #define MAX_RELOOPS 3 // maximum reloops until giveup
-    char buf[BUF_SIZE];
-    int nReadOut = 0;
-    int nReadErr = 0;
+    char buf[BUF_SIZE];  // read() buffer
+    int nReadOut = 0;    // Number of characters read from stdout
+    int nReadErr = 0;    // Ditto for stderr.
+
       /* Array containing outP, errP pollfd structs */
-    struct pollfd pArray[2];
-    pArray[0].fd = outP[0];
-    pArray[0].events = POLLIN;
-    pArray[1].fd = errP[0];
-    pArray[1].events = POLLIN;
+    struct pollfd pfds[2];
+    pfds[OUTP].fd = outP[READ];
+    pfds[OUTP].events = POLLIN;
+    pfds[ERRP].fd = errP[READ];
+    pfds[ERRP].events = POLLIN;
     int pollResult = 0;
-//    int nReloops = 0;
     int stopLooping = 0;
 
     do {
-      pollResult = poll(pArray,2,MAX_BLOCK_TIME);
+      pollResult = poll(pfds,2,MAX_BLOCK_TIME);
         /* Lots of error checking; the "bad" paths are marked 
-           with //! and the "good" paths with //~ */
+           with //! and the "good" paths with //~~ */
       nReadOut = 0;
       nReadErr = 0;
+
+      if (pollResult > 0) { //~~
         /* Receive from outP */
-      if (pollResult > 0) { //~
-//        nReloops = 0;
-        if (pArray[0].revents & POLLNVAL) { //!
-          throw std::runtime_error("outP[0] invalid");
+        if (pfds[OUTP].revents & POLLNVAL) { //!
+          throw std::runtime_error("outP[READ] invalid");
         }
-        else if (pArray[0].revents & POLLERR) {//!
-          throw std::runtime_error("outP[0] error"); 
+        else if (pfds[OUTP].revents & POLLERR) {//!
+          throw std::runtime_error("outP[READ] error"); 
         }
-        else if (pArray[0].revents & POLLIN) { //~
-          nReadOut = read(outP[0], buf, BUF_SIZE);
+        else if (pfds[OUTP].revents & POLLIN) { //~~
+          nReadOut = read(outP[READ], buf, BUF_SIZE);
           if (nReadOut < 0) { //!
             int errNo = errno;
             if ((errNo == EAGAIN) || (errNo == EWOULDBLOCK)) {}
             else throw std::runtime_error("Read outP failed.");
           }
-          if (nReadOut > 0) { //~
+          if (nReadOut > 0) { //~~
             (*stdoutTo).append(buf,0,nReadOut);
             memset(buf,0,BUF_SIZE);
           }
         }
 
         /* Receive from errP */
-        if (pArray[1].revents & POLLNVAL) { //!
-          throw std::runtime_error("errP[0] invalid");
+        if (pfds[ERRP].revents & POLLNVAL) { //!
+          throw std::runtime_error("errP[READ] invalid");
         }
-        else if (pArray[1].revents & POLLERR) {//!
-          throw std::runtime_error("errP[0] error"); 
+        else if (pfds[ERRP].revents & POLLERR) {//!
+          throw std::runtime_error("errP[READ] error"); 
         }
-        else if (pArray[1].revents & POLLIN) { //~
-          nReadErr = read(errP[0], buf, BUF_SIZE);
+        else if (pfds[ERRP].revents & POLLIN) { //~~
+          nReadErr = read(errP[READ], buf, BUF_SIZE);
           if (nReadErr < 0) {//!
             int errNo = errno;
             if ((errNo == EAGAIN) || (errNo == EWOULDBLOCK)) {}
             else throw std::runtime_error("Read errP failed.");
           }
-          if (nReadErr > 0) { //~
+          if (nReadErr > 0) { //~~
             (*stderrTo).append(buf,0,nReadErr);
             memset(buf,0,BUF_SIZE);
           }
         }
       }
-      else if (pollResult < 0) 
+      else if (pollResult < 0) //! 
         throw std::runtime_error("Poll failed");
-//      else nReloops++; // pollResult == 0
           /* All conditions must be met to stop looping */
       stopLooping  = (nReadOut < BUF_SIZE);
       stopLooping *= (nReadErr < BUF_SIZE);
-      stopLooping *= (pArray[0].revents & POLLHUP);
-      stopLooping *= (pArray[1].revents & POLLHUP);
-//      stopLooping *= (nReloops >= MAX_RELOOPS);  
+      stopLooping *= (pfds[OUTP].revents & POLLHUP);
+      stopLooping *= (pfds[ERRP].revents & POLLHUP);
     } while (!stopLooping);
    
     //-> Close remaining file descriptors
-    if (close(outP[0])) throw std::runtime_error("P close out");
-    if (close(errP[0])) throw std::runtime_error("P close err");
+    if (close(outP[READ])) throw std::runtime_error("P close out");
+    if (close(errP[READ])) throw std::runtime_error("P close err");
  
-    //-> Collect return status from exec'd function
-    
+    //-> Set returnTo if child terminated successfully
     int stat_val;
-    if (waitpid(pid, &stat_val, 0)==-1)
+    if (waitpid(pid, &stat_val, 0) == -1)
       throw std::runtime_error("waitpid failed");
     if (WIFEXITED(stat_val))  
       *returnTo = WEXITSTATUS(stat_val); 
