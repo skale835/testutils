@@ -22,6 +22,8 @@
     /* waitpid() */
   #include <poll.h>
     /* poll() */
+  #include <stdlib.h>
+    /* exit() */
   #include <string.h>
   namespace test {        /* Call all functions using test::fn() */
 
@@ -103,15 +105,19 @@
   inline void printOutput(const std::string& outName,
                           const std::string& termOutput) {
     std::string output = termOutput;
-    /* If last character is NOT `\n` add one. */
-    if (output.back() != '\n') output.append("\n");
 
     std::size_t lineNo = 1;
     std::cout << TU_MAG("OUTPUT\t" << outName);
+
     if (termOutput.length() == 0) {
       std::cout << TU_GRA("\nNONE") << std::endl;
       return;
     }
+    else {
+      /* If last character is NOT `\n` add one. */
+      if (output.back() != '\n') output.append("\n");
+    }
+
     std::cout << ": "<< output.size() << "\n" 
               << TU_GRA(std::to_string(lineNo++)) + "\t";
     std::size_t pos = 0;
@@ -279,21 +285,29 @@
       /* Child process connects stdout, stderr to pipes, then 
          exec(cmd). */
     if (!pid) {
-      if (close(outP[0])) throw std::runtime_error("close out");
-      if (close(errP[0])) throw std::runtime_error("close err");
+      //-> dup() the pipe ends to stdout and stderr
+      if (close(outP[0])) throw std::runtime_error("C close out");
+      if (close(errP[0])) throw std::runtime_error("C close err");
       std::cout << "Child first" << std::endl;
       if (dup2(outP[1],1)==-1) 
         throw std::runtime_error("out dup failed");
       if (dup2(errP[1],2)==-1) 
         throw std::runtime_error("err dup failed");
+      if (close(outP[1])) throw std::runtime_error("C close out");
+      if (close(errP[1])) throw std::runtime_error("C close err");
+      
+      //-> exec(cmd)
       execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*) NULL);
-      /* Note that child process will either throw or terminate
-         via exec. Effectively, it will end in this block. */
+      /* Note that if exec() is successful, this process will 
+         terminate, effectively ending here. Subsequent lines 
+         will only execute if exec() fails. */
+      _exit(EXIT_FAILURE)
+       
     }
 
     //-> Parent: Close leftover pipe ends.
-    if (close(outP[1])) throw std::runtime_error("close out");
-    if (close(errP[1])) throw std::runtime_error("close err");
+    if (close(outP[1])) throw std::runtime_error("P close out");
+    if (close(errP[1])) throw std::runtime_error("P close err");
 
     //-O Collect output from outP and/or errP. Move on when done.
     #define BUF_SIZE 128
@@ -316,6 +330,8 @@
       pollResult = poll(pArray,2,MAX_BLOCK_TIME);
         /* Lots of error checking; the "bad" paths are marked 
            with //! and the "good" paths with //~ */
+
+        /* Receive from outP */
       if (pollResult > 0) { //~
         if (pArray[0].revents & POLLIN) { //~
           nBytesReadOut = read(outP[0], buf, BUF_SIZE);
@@ -334,12 +350,13 @@
           throw std::runtime_error("outP[0] error"); 
         }
 
+        /* Receive from errP */
         if (pArray[1].revents & POLLIN) { //~
           nBytesReadErr = read(errP[0], buf, BUF_SIZE);
-          if (nBytesReadOut < 0) {//!
+          if (nBytesReadErr < 0) {//!
             throw std::runtime_error("Read errP failed.");
           }
-          if (nBytesReadOut > 0) { //~
+          if (nBytesReadErr > 0) { //~
             (*stderrTo).append(buf,0,nBytesReadOut);
             memset(buf,0,BUF_SIZE);
           }
@@ -350,11 +367,17 @@
         else if (pArray[1].revents & POLLERR) {//!
           throw std::runtime_error("errP[0] error"); 
         }
+
+          /* Count loops with no receipt */
+        if (nBytesReadOut | nBytesReadErr) nReloops = 0;
+        else nReloops++;
+
         keepLooping = !( 
              (nBytesReadOut < BUF_SIZE)
           && (nBytesReadErr < BUF_SIZE)
           && (pArray[0].revents & POLLHUP)
-          && (pArray[1].revents & POLLHUP)); 
+          && (pArray[1].revents & POLLHUP));
+        keepLooping = keepLooping || (nReloops << MAX_RELOOPS);  
       } 
     } while (keepLooping);
     
