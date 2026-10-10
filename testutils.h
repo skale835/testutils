@@ -93,7 +93,7 @@
   template <typename T>
   inline void printArray(const std::string& arrayName, 
                          const T& array) {
-    std::cout << "\t" + arrayName + " = {" ;
+    std::cout << "\t" + arrayName + " = { " ;
     for (const auto & arrayElement : array) {
       std::cout << arrayElement << " ";
     }
@@ -269,14 +269,12 @@
                      int *returnTo) {
   
     //-> Create pipes for stdout and stderr
-    int outP[2];
-    int errP[2];
-    std::cout << "Milestone 1" << std::endl;
+    int outP[2] = {0};
+    int errP[2] = {0};
     if (pipe(outP)) throw std::runtime_error("out pipe failed");
-    std::cout << "Milestone 2" << std::endl;
     if (pipe(errP)) throw std::runtime_error("err pipe failed");
-    std::cout << "Milestone 3" << std::endl;
-
+    printArray("outP",outP);
+    printArray("errP",errP);
     //-> Fork
     pid_t pid = fork();
     if (pid == -1) throw std::runtime_error("fork failed");
@@ -301,10 +299,10 @@
       /* Note that if exec() is successful, this process will 
          terminate, effectively ending here. Subsequent lines 
          will only execute if exec() fails. */
-      _exit(EXIT_FAILURE)
+      _exit(EXIT_FAILURE);
        
     }
-
+    std::cout << "Parent is running" << std::endl;
     //-> Parent: Close leftover pipe ends.
     if (close(outP[1])) throw std::runtime_error("P close out");
     if (close(errP[1])) throw std::runtime_error("P close err");
@@ -324,7 +322,7 @@
     pArray[1].events = POLLIN;
     int pollResult = 0;
     int nReloops = 0;
-    int keepLooping = 0;
+    int stopLooping = 0;
 
     do {
       pollResult = poll(pArray,2,MAX_BLOCK_TIME);
@@ -333,6 +331,7 @@
 
         /* Receive from outP */
       if (pollResult > 0) { //~
+        nReoops = 0;
         if (pArray[0].revents & POLLIN) { //~
           nBytesReadOut = read(outP[0], buf, BUF_SIZE);
           if (nBytesReadOut < 0) { //!
@@ -357,7 +356,7 @@
             throw std::runtime_error("Read errP failed.");
           }
           if (nBytesReadErr > 0) { //~
-            (*stderrTo).append(buf,0,nBytesReadOut);
+            (*stderrTo).append(buf,0,nBytesReadErr);
             memset(buf,0,BUF_SIZE);
           }
         }
@@ -368,20 +367,22 @@
           throw std::runtime_error("errP[0] error"); 
         }
 
-          /* Count loops with no receipt */
-        if (nBytesReadOut | nBytesReadErr) nReloops = 0;
-        else nReloops++;
 
-        keepLooping = !( 
-             (nBytesReadOut < BUF_SIZE)
-          && (nBytesReadErr < BUF_SIZE)
-          && (pArray[0].revents & POLLHUP)
-          && (pArray[1].revents & POLLHUP));
-        keepLooping = keepLooping || (nReloops << MAX_RELOOPS);  
-      } 
-    } while (keepLooping);
+          /* All conditions must be met to stop looping */
+        stopLooping  = (nBytesReadOut < BUF_SIZE);
+        stopLooping *= (nBytesReadErr < BUF_SIZE);
+        stopLooping *= (pArray[0].revents & POLLHUP);
+        stopLooping *= (pArray[1].revents & POLLHUP);
+        stopLooping *= (nReloops >= MAX_RELOOPS);  
+      }
+      else if (pollResult < 0) 
+        throw std::runtime_error("Poll failed");
+      else nReloops++; // pollResult == 0
+    } while (!stopLooping);
     
     //-> Collect return status from exec'd function
+    
+    std::cout << "Parent is waiting" << std::endl;
     int stat_val;
     if (waitpid(pid, &stat_val, 0)==-1)
       throw std::runtime_error("waitpid failed");
