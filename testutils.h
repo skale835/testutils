@@ -310,11 +310,11 @@
     if (close(errP[1])) throw std::runtime_error("P close err");
 
     //-> Set read pipe ends to nonblocking.
-    if !(fcntl(outP[0],F_GETFD) & O_NONBLOCK) {
+    if (!(fcntl(outP[0],F_GETFD) & O_NONBLOCK)) {
       fcntl(outP[0],F_SETFD,O_NONBLOCK);
     }
 
-    if !(fcntl(errP[0],F_GETFD) & O_NONBLOCK) {
+    if (!(fcntl(errP[0],F_GETFD) & O_NONBLOCK)) {
       fcntl(errP[0],F_SETFD,O_NONBLOCK);
     }
 
