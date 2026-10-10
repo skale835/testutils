@@ -190,8 +190,6 @@
     int errP[2] = {0};
     if (pipe(outP)) throw std::runtime_error("out pipe failed");
     if (pipe(errP)) throw std::runtime_error("err pipe failed");
-    printArray("outP",outP);
-    printArray("errP",errP);
     //-> Fork
     pid_t pid = fork();
     if (pid == -1) throw std::runtime_error("fork failed");
@@ -203,7 +201,6 @@
       //-> dup() the pipe ends to stdout and stderr
       if (close(outP[0])) throw std::runtime_error("C close out");
       if (close(errP[0])) throw std::runtime_error("C close err");
-      std::cout << "Child first" << std::endl;
       if (dup2(outP[1],1)==-1) 
         throw std::runtime_error("out dup failed");
       if (dup2(errP[1],2)==-1) 
@@ -219,7 +216,6 @@
       throw std::runtime_error("exec fail");
        
     }
-    std::cout << "Parent is running" << std::endl;
     //-> Parent: Close leftover pipe ends.
     if (close(outP[1])) throw std::runtime_error("P close out");
     if (close(errP[1])) throw std::runtime_error("P close err");
@@ -321,7 +317,6 @@
  
     //-> Collect return status from exec'd function
     
-    std::cout << "Parent is waiting" << std::endl;
     int stat_val;
     if (waitpid(pid, &stat_val, 0)==-1)
       throw std::runtime_error("waitpid failed");
