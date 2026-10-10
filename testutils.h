@@ -310,12 +310,18 @@
     if (close(errP[1])) throw std::runtime_error("P close err");
 
     //-> Set read pipe ends to nonblocking.
-    if (!(fcntl(outP[0],F_GETFD) & O_NONBLOCK)) {
-      fcntl(outP[0],F_SETFD,O_NONBLOCK);
+    int flags;
+    flags = fcntl(outP[0], F_GETFL);
+    if (flags == -1) throw std::runtime_error("outP GETFL fail");
+    if (!(flags & O_NONBLOCK)) {
+      flags = fcntl(outP[0], F_SETFL, flags | O_NONBLOCK);
+      if (flags == -1) throw std::runtime_error("outP SETFL fail");
     }
-
-    if (!(fcntl(errP[0],F_GETFD) & O_NONBLOCK)) {
-      fcntl(errP[0],F_SETFD,O_NONBLOCK);
+    flags = fcntl(errP[0], F_GETFL);
+    if (flags == -1) throw std::runtime_error("errP GETFL fail");
+    if (!(flags & O_NONBLOCK)) {
+      flags = fcntl(errP[0], F_SETFL, flags | O_NONBLOCK);
+      if (flags == -1) throw std::runtime_error("errP SETFL fail");
     }
 
     //-O Collect output from outP and/or errP. Move on when done.
@@ -348,7 +354,7 @@
           if (nBytesReadOut < 0) { //!
             int errNo = errno;
             if (errNo == EAGAIN) {
-              nBytesReadOut--; /* A hack, but OK for just now. */
+//            nBytesReadOut--; /* A hack, but OK for just now. */
             }
             else {
             throw std::runtime_error("Read outP failed.");
