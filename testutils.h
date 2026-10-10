@@ -179,96 +179,11 @@
 
 
 // =========== CLI COMMAND EVALUATION ============================ //
-  int runCommand(std::string sysCmd,
+
+  int runCommand(std::string cmd,
                  std::string *stdoutTo,
-                 std::string* stderrTo,
-                 int* returnTo) {
-    const std::size_t bufsize = 128;
-    FILE *pipe = popen(sysCmd.c_str(), "r");
-    char buf[bufsize];
-    char* fgets_ptr = buf;
-    while(1) {
-      fgets_ptr = fgets(buf, bufsize, pipe);
-      if (fgets_ptr == NULL) break;
-      (*stdoutTo).append(buf);
-    } 
-    *stderrTo = "";
-    *returnTo = pclose(pipe);
-    return 0;
-  }
- 
-  int runCommandFork(std::string cmd,
-                     std::string *stdoutTo,
-                     std::string *stderrTo,
-                     int         *returnTo) {
-
-    //-> Create pipes for stdout and stderr
-    int outP[2];
-    int errP[2];
-    std::cout << "Milestone 1" << std::endl;
-    if (pipe(outP)) throw std::runtime_error("out pipe failed");
-    std::cout << "Milestone 2" << std::endl;
-    if (pipe(errP)) throw std::runtime_error("err pipe failed");
-    std::cout << "Milestone 3" << std::endl;
-
-    //-> Fork
-    pid_t pid = fork();
-    if (pid == -1) throw std::runtime_error("fork failed");
-
-    //-? Child 
-      /* Child process connects stdout, stderr to pipes, then 
-         exec(cmd). */
-    if (!pid) {
-      if (close(outP[0])) throw std::runtime_error("close out");
-      if (close(errP[0])) throw std::runtime_error("close err");
-      std::cout << "Child first" << std::endl;
-      if (dup2(outP[1],1)==-1) 
-        throw std::runtime_error("out dup failed");
-      if (dup2(errP[1],2)==-1) 
-        throw std::runtime_error("err dup failed");
-      execlp("/bin/sh", "sh", "-c", cmd.c_str(), (char*) NULL);
-    }
-
-    //-> Parent awaits child's termination, gets return val.
-    if (close(outP[1])) throw std::runtime_error("close out");
-    if (close(errP[1])) throw std::runtime_error("close err");
-
-    //-> Read stdout and stderr
-    #define BUF_SIZE 128
-    char buf[BUF_SIZE];
-    int nBytesReadOut = 0;
-    int nBytesReadErr = 0;
-    do {
-      nBytesReadOut = read(outP[0], buf, BUF_SIZE);
-      if (nBytesReadOut < 0) throw std::runtime_error("Read failed.");
-      if (nBytesReadOut > 0) {(*stdoutTo).append(buf,0,nBytesReadOut);
-                           memset(buf,0,BUF_SIZE);}
-
-      nBytesReadErr = read(errP[0], buf, BUF_SIZE);
-      if (nBytesReadErr < 0) throw std::runtime_error("Read failed.");
-      if (nBytesReadErr > 0) {(*stderrTo).append(buf,0,nBytesReadErr);
-                           memset(buf,0,BUF_SIZE);};
-
-    } while (nBytesReadOut + nBytesReadErr);
-
-    int stat_val;
-    if (waitpid(pid, &stat_val, 0)==-1)
-      throw std::runtime_error("waitpid failed");
-    std::cout << "Child stat_val: " << stat_val << std::endl;
-    if (WIFEXITED(stat_val))  
-      *returnTo = WEXITSTATUS(stat_val); 
-    std::cout << "Child process PID: " << pid << std::endl;
-
-    
-    std::cout << "stderr done\n";
-    
-    return 0; 
-  }
-
-  int runCommandPoll(std::string cmd,
-                     std::string *stdoutTo,
-                     std::string *stderrTo,
-                     int *returnTo) {
+                 std::string *stderrTo,
+                 int *returnTo) {
   
     //-> Create pipes for stdout and stderr
     int outP[2] = {0};
@@ -301,7 +216,7 @@
       /* Note that if exec() is successful, this process will 
          terminate, effectively ending here. Subsequent lines 
          will only execute if exec() fails. */
-      _exit(EXIT_FAILURE);
+      throw std::runtime_error("exec fail");
        
     }
     std::cout << "Parent is running" << std::endl;
@@ -355,7 +270,7 @@
           nReadOut = read(outP[0], buf, BUF_SIZE);
           if (nReadOut < 0) { //!
             int errNo = errno;
-            if (errNo == EAGAIN) {}
+            if ((errNo == EAGAIN) || (errNo = EWOULDBLOCK)) {}
             else throw std::runtime_error("Read outP failed.");
           }
           if (nReadOut > 0) { //~
@@ -375,7 +290,7 @@
           nReadErr = read(errP[0], buf, BUF_SIZE);
           if (nReadErr < 0) {//!
             int errNo = errno;
-            if (errNo == EAGAIN) {}
+            if ((errNo == EAGAIN) || (errNo = EWOULDBLOCK)) {}
             else throw std::runtime_error("Read errP failed.");
           }
           if (nReadErr > 0) { //~
@@ -393,7 +308,6 @@
       else if (pollResult < 0) 
         throw std::runtime_error("Poll failed");
 //      else nReloops++; // pollResult == 0
-//    std::cout << nReloops << std::endl; // TEMP
           /* All conditions must be met to stop looping */
       stopLooping  = (nReadOut < BUF_SIZE);
       stopLooping *= (nReadErr < BUF_SIZE);
@@ -401,7 +315,11 @@
       stopLooping *= (pArray[1].revents & POLLHUP);
 //      stopLooping *= (nReloops >= MAX_RELOOPS);  
     } while (!stopLooping);
-    
+   
+    //-> Close remaining file descriptors
+    if (close(outP[0])) throw std::runtime_error("P close out");
+    if (close(errP[0])) throw std::runtime_error("P close err");
+ 
     //-> Collect return status from exec'd function
     
     std::cout << "Parent is waiting" << std::endl;
@@ -410,7 +328,8 @@
       throw std::runtime_error("waitpid failed");
     if (WIFEXITED(stat_val))  
       *returnTo = WEXITSTATUS(stat_val); 
-
+    else 
+      throw std::runtime_error("child abnormal exit");
     return 0; 
   }
 
