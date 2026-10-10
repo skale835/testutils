@@ -310,7 +310,7 @@
     //-O Collect output from outP and/or errP. Move on when done.
     #define BUF_SIZE 128
     #define MAX_BLOCK_TIME 1000 // ms until reloop
-    #define MAX_RELOOPS 3 // maximum reloops until giveup
+//    #define MAX_RELOOPS 3 // maximum reloops until giveup
     char buf[BUF_SIZE];
     int nBytesReadOut = 0;
     int nBytesReadErr = 0;
@@ -321,7 +321,7 @@
     pArray[1].fd = errP[0];
     pArray[1].events = POLLIN;
     int pollResult = 0;
-    int nReloops = 0;
+//    int nReloops = 0;
     int stopLooping = 0;
 
     do {
@@ -331,7 +331,7 @@
 
         /* Receive from outP */
       if (pollResult > 0) { //~
-        nReoops = 0;
+//        nReloops = 0;
         if (pArray[0].revents & POLLIN) { //~
           nBytesReadOut = read(outP[0], buf, BUF_SIZE);
           if (nBytesReadOut < 0) { //!
@@ -366,18 +366,17 @@
         else if (pArray[1].revents & POLLERR) {//!
           throw std::runtime_error("errP[0] error"); 
         }
-
-
-          /* All conditions must be met to stop looping */
-        stopLooping  = (nBytesReadOut < BUF_SIZE);
-        stopLooping *= (nBytesReadErr < BUF_SIZE);
-        stopLooping *= (pArray[0].revents & POLLHUP);
-        stopLooping *= (pArray[1].revents & POLLHUP);
-        stopLooping *= (nReloops >= MAX_RELOOPS);  
       }
       else if (pollResult < 0) 
         throw std::runtime_error("Poll failed");
-      else nReloops++; // pollResult == 0
+//      else nReloops++; // pollResult == 0
+//    std::cout << nReloops << std::endl; // TEMP
+          /* All conditions must be met to stop looping */
+      stopLooping  = (nBytesReadOut < BUF_SIZE);
+      stopLooping *= (nBytesReadErr < BUF_SIZE);
+      stopLooping *= (pArray[0].revents & POLLHUP);
+      stopLooping *= (pArray[1].revents & POLLHUP);
+//      stopLooping *= (nReloops >= MAX_RELOOPS);  
     } while (!stopLooping);
     
     //-> Collect return status from exec'd function
